@@ -1,0 +1,98 @@
+//@version=6
+indicator('VP', shorttitle = 'VP', overlay = true, max_bars_back = 4999, max_polylines_count = 100, max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500)
+
+var g_VP = 'Volume Profile'
+enable_vp = input.bool(true, 'Enable VP', group = g_VP)
+show_vp = input.bool(true, 'Show VP         ', inline = 'VP', tooltip = 'Whether to show the volume profile', group = g_VP)
+vp_color = input.color(color.rgb(93, 96, 107, 70), '', inline = 'VP', group = g_VP)
+show_vpoc = input.bool(true, 'Show VPOC      ', inline = 'VPOC', tooltip = 'Whether to show the volume point of control (VPOC), or the level with the largest volume in a given volume profile', group = g_VP)
+vpoc_color = input.color(color.rgb(240, 98, 146), '', inline = 'VPOC', group = g_VP)
+rows = input.int(200, 'Rows', 0, 200, tooltip = 'The number of price levels/rows that will be used to approximate the cumulative volume profile', group = g_VP)
+tf = input.timeframe('W', 'Profile Timeframe', tooltip = 'The aggregate timeframe that the volume profile represents', group = g_VP)
+ltf = input.timeframe('3', 'Resolution Timeframe', tooltip = 'The timeframe whose price data will be used to build the volume profile', group = g_VP)
+extend = input.int(30, 'Profile Extend %', 0, 100, tooltip = 'How much the volume profile should extend to the next session', group = g_VP)
+
+var vpoc = array.new_line()
+
+var values = array.new_float()
+var x_vol = array.new_int()
+var y_vol = array.new_float()
+
+var PLA = array.new<chart.point>()
+var polyline PL = na
+var line temp_vpoc = na
+var line temp_line = na
+var label temp_label = na
+
+var int lb_idx = na
+var int lb_time = na
+
+ltf := timeframe.in_seconds(ltf) <= timeframe.in_seconds() ? ltf : ''
+[ltf_H, ltf_L, ltf_V] = request.security_lower_tf(syminfo.tickerid, ltf, [high, low, volume])
+
+if not na(lb_idx) and enable_vp
+    lb = bar_index - lb_idx > 0 ? bar_index - lb_idx : 1
+
+    y_max = ta.highest(high[1], lb)
+    y_min = ta.lowest(low[1], lb)
+
+    if timeframe.change(tf) or barstate.islast
+        x_vol.clear()
+        y_vol.clear()
+        values.clear()
+
+        for i = 0 to rows by 1
+            y = y_min + i * (y_max - y_min) / rows
+            x_vol.push(lb_time)
+            y_vol.push(y)
+            values.push(0)
+
+        for i = bar_index - lb_idx to 1 by 1
+            vol = ltf_V[i]
+            if vol.size() > 0
+                for j = 0 to values.size() - 1 by 1
+                    temp = y_vol.get(j)
+                    for k = 0 to vol.size() - 1 by 1
+                        H = ltf_H[i]
+                        L = ltf_L[i]
+                        V = ltf_V[i]
+                        if H.get(k) >= temp and L.get(k) <= temp
+                            add = math.floor(V.get(k) / ((H.get(k) - L.get(k)) / (y_max - y_min) / rows))
+                            values.set(j, values.get(j) + add)
+
+        max_y = y_vol.get(values.indexof(values.max()))
+        sf = values.max() / (time[1] - lb_time) / (extend / 100)
+
+        for j = 0 to values.size() - 1 by 1
+            set = lb_time + math.floor(values.get(j) / sf)
+            x_vol.set(j, set)
+
+        PLA.clear()
+        PLA.push(chart.point.from_time(lb_time, y_min))
+        for i = 0 to x_vol.size() - 1 by 1
+            PLA.push(chart.point.from_time(x_vol.get(i), y_vol.get(i)))
+        PLA.push(chart.point.from_time(lb_time, y_max))
+
+        PL.delete()
+        if timeframe.change(tf)
+            polyline.new(PLA, curved = false, closed = true, line_color = show_vp ? vp_color : na, fill_color = show_vp ? vp_color : na, xloc = xloc.bar_time)
+            temp_vpoc.delete()
+            temp_line.delete()
+            temp_label.delete()
+            vpoc.unshift(line.new(lb_time, max_y, time, max_y, xloc = xloc.bar_time, color = show_vpoc ? vpoc_color : na, width = 1))
+        else
+            PL := polyline.new(PLA, curved = false, closed = true, line_color = show_vp ? vp_color : na, fill_color = show_vp ? vp_color : na, xloc = xloc.bar_time)
+            if na(temp_vpoc)
+                temp_vpoc := line.new(lb_time, max_y, time, max_y, xloc = xloc.bar_time, color = show_vpoc ? vpoc_color : na, width = 1)
+                temp_line := line.new(bar_index, max_y, bar_index + 21, max_y, xloc = xloc.bar_index, color = show_vpoc ? vpoc_color : na, width = 1)
+                temp_label := label.new(bar_index + 21, max_y, text = "POC", tooltip = str.tostring(max_y, "#.####"), color = color.rgb(0, 0, 0, 100), textcolor = show_vpoc ? vpoc_color : na, style = label.style_label_left, xloc = xloc.bar_index, text_font_family = font.family_monospace)
+                temp_vpoc
+            temp_vpoc.set_y1(max_y)
+            temp_vpoc.set_xy2(time, max_y)
+            temp_line.set_xy1(bar_index, max_y)
+            temp_line.set_xy2(bar_index + 21, max_y)
+            temp_label.set_xy(bar_index + 21, max_y)
+
+if timeframe.change(tf)
+    lb_idx := bar_index
+    lb_time := time
