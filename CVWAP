@@ -1,0 +1,268 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Edward
+
+//@version=6
+indicator('Composite VWAP', shorttitle = 'CVWAP', overlay = true, max_bars_back = 4999, max_polylines_count = 100, max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500)
+
+Box_Ctl = input(true, title = 'Box', group = 'setting')
+Plot_Ctl = input(true, title = 'Plot', group = 'setting')
+
+// Composite VWAP Inputs
+Composite_Ctl_Day = input(false, title = '', group = 'day', inline = '1')
+Composite_Ctl_Week = input(false, title = '', group = 'week', inline = '2')
+Composite_Ctl_Month = input(false, title = '', group = 'month', inline = '3')
+Composite_Ctl_Quarter = input(false, title = '', group = 'quarter', inline = '4')
+
+// Input for each range group
+Composite_range_1_Day = input.int(defval = 2, title = '', minval = 1, group = 'day', inline = '1')
+Composite_range_2_Day = input.int(defval = 0, title = '-', minval = 0, group = 'day', inline = '1')
+Composite_Day_Col = input.color(defval = color.rgb(255, 255, 255, 60), title = '', group = 'day', inline = '1')
+
+Composite_range_1_Week = input.int(defval = 2, title = '', minval = 1, group = 'week', inline = '2')
+Composite_range_2_Week = input.int(defval = 0, title = '-', minval = 0, group = 'week', inline = '2')
+Composite_Week_Col = input.color(defval = color.rgb(255, 255, 255, 60), title = '', group = 'week', inline = '2')
+
+Composite_range_1_Month = input.int(defval = 2, title = '', minval = 1, group = 'month', inline = '3')
+Composite_range_2_Month = input.int(defval = 0, title = '-', minval = 0, group = 'month', inline = '3')
+Composite_Month_Col = input.color(defval = color.rgb(255, 255, 255, 60), title = '', group = 'month', inline = '3')
+
+Composite_range_1_Quarter = input.int(defval = 2, title = '', minval = 1, group = 'quarter', inline = '4')
+Composite_range_2_Quarter = input.int(defval = 0, title = '-', minval = 0, group = 'quarter', inline = '4')
+Composite_Quarter_Col = input.color(defval = color.rgb(255, 255, 255, 60), title = '', group = 'quarter', inline = '4')
+
+// Get the current year, month, day, and day of the week from timenow
+currentYear = year(timenow)
+currentMonth = month(timenow)
+currentDay = dayofmonth(timenow)
+currentDayOfWeek = dayofweek(timenow)
+
+// Get the timestamp of the current day's 00:00:00 (midnight)
+currentDayStart = timestamp(currentYear, currentMonth, currentDay, 0, 0)
+
+// Function to calculate start and end time based on the input period
+getTimeRange(range_1, range_2, timeType) =>
+    var int startTime = na
+    var int endTime = na
+
+    if range_1 < range_2
+        [na, na]
+
+    if timeType == 'Month'
+        // Handle month and year overflow
+        startMonth = currentMonth - range_1
+        endMonth = currentMonth - range_2
+        startYear = currentYear
+        endYear = currentYear
+
+        // If the calculated month is <= 0 (negative or zero), we need to adjust the year
+        if startMonth <= 0
+            startMonth := 12 + startMonth // Adjust for months less than 1
+            startYear := currentYear - 1 // Go back to the previous year
+
+        if endMonth <= 0
+            endMonth := 12 + endMonth // Adjust for months less than 1
+            endYear := currentYear - 1 // Go back to the previous year
+
+        // Calculate start and end timestamps
+        startTime := timestamp(startYear, startMonth, 1, 0, 0) // Start of the (currentMonth - range_1)
+        endTime := timestamp(endYear, endMonth, 1, 0, 0) // Start of the (currentMonth - range_2)
+
+    else if timeType == 'Quarter'
+        // Determine the current quarter and its start month
+        currentQuarter = math.ceil(currentMonth / 3.0)
+        startQuarter = currentQuarter - range_1
+        endQuarter = currentQuarter - range_2
+        startYear = currentYear
+        endYear = currentYear
+
+        if startQuarter <= 0
+            startQuarter := 4 + startQuarter
+            startYear := currentYear - 1 
+
+        if endQuarter <= 0
+            endQuarter := 4 + endQuarter
+            endYear := currentYear - 1
+
+        startMonth = (startQuarter - 1) * 3 + 1
+        endMonth = (endQuarter - 1) * 3 + 1
+
+        startTime := timestamp(startYear, startMonth, 1, 0, 0)
+        endTime := timestamp(endYear, endMonth, 1, 0, 0)
+
+    else if timeType == 'Week'
+        // Handle week calculation: Calculate start of the week (Monday)
+        // Calculate the timestamp for the beginning of this week (Monday)
+        adjustedDayOfWeek = currentDayOfWeek == 1 ? 7 : currentDayOfWeek - 1
+        currentMondayStart = currentDayStart - (adjustedDayOfWeek - 1) * 24 * 60 * 60 * 1000
+
+        // Calculate start and end time based on range_1 and range_2 weeks ago
+        startTime := currentMondayStart - range_1 * 7 * 24 * 60 * 60 * 1000 // Subtract week offset in milliseconds
+        endTime := currentMondayStart - range_2 * 7 * 24 * 60 * 60 * 1000 // Subtract week offset in milliseconds
+
+    else if timeType == 'Day'
+        // Handle day calculation (same as before)
+        startTime := currentDayStart - range_1 * 24 * 60 * 60 * 1000 // Subtract day offset in milliseconds
+        endTime := currentDayStart - range_2 * 24 * 60 * 60 * 1000 // Subtract day offset in milliseconds
+
+    [startTime, endTime]
+
+Src = hlc3
+int right_bar = time(timeframe.period, -21)
+color label_color_setting = color.new(#ecf008, 100)
+string format_level = '#.####'
+string DEFAULT_LINE_STYLE = line.style_dotted
+string DEFAULT_LABEL_STYLE = label.style_label_left
+// Variables for VWAP calculation
+var float sumSrcVol_Day = 0.0
+var float sumVol_Day = 0.0
+var float sumSrcSrcVol_Day = 0.0
+
+var float sumSrcVol_Week = 0.0
+var float sumVol_Week = 0.0
+var float sumSrcSrcVol_Week = 0.0
+
+var float sumSrcVol_Month = 0.0
+var float sumVol_Month = 0.0
+var float sumSrcSrcVol_Month = 0.0
+
+var float sumSrcVol_Quarter = 0.0
+var float sumVol_Quarter = 0.0
+var float sumSrcSrcVol_Quarter = 0.0
+
+// Get start and end time based on the selected period for Day, Week, and Month
+[startCalculationDate_Day, endCalculationDate_Day] = getTimeRange(Composite_range_1_Day, Composite_range_2_Day, 'Day')
+[startCalculationDate_Week, endCalculationDate_Week] = getTimeRange(Composite_range_1_Week, Composite_range_2_Week, 'Week')
+[startCalculationDate_Month, endCalculationDate_Month] = getTimeRange(Composite_range_1_Month, Composite_range_2_Month, 'Month')
+[startCalculationDate_Quarter, endCalculationDate_Quarter] = getTimeRange(Composite_range_1_Quarter, Composite_range_2_Quarter, 'Quarter')
+
+// Only calculate VWAP if the control is enabled for that range (Day, Week, or Month)
+if Composite_Ctl_Day and time >= startCalculationDate_Day and time < endCalculationDate_Day
+    sumSrcVol_Day := sumSrcVol_Day + Src * volume
+    sumVol_Day := sumVol_Day + volume
+    sumSrcSrcVol_Day := sumSrcSrcVol_Day + Src * Src * volume
+    sumSrcSrcVol_Day
+
+if Composite_Ctl_Week and time >= startCalculationDate_Week and time < endCalculationDate_Week
+    sumSrcVol_Week := sumSrcVol_Week + Src * volume
+    sumVol_Week := sumVol_Week + volume
+    sumSrcSrcVol_Week := sumSrcSrcVol_Week + Src * Src * volume
+    sumSrcSrcVol_Week
+
+if Composite_Ctl_Month and time >= startCalculationDate_Month and time < endCalculationDate_Month
+    sumSrcVol_Month := sumSrcVol_Month + Src * volume
+    sumVol_Month := sumVol_Month + volume
+    sumSrcSrcVol_Month := sumSrcSrcVol_Month + Src * Src * volume
+    sumSrcSrcVol_Month
+
+if Composite_Ctl_Quarter and time >= startCalculationDate_Quarter and time < endCalculationDate_Quarter
+    sumSrcVol_Quarter := sumSrcVol_Quarter + Src * volume
+    sumVol_Quarter := sumVol_Quarter + volume
+    sumSrcSrcVol_Quarter := sumSrcSrcVol_Quarter + Src * Src * volume
+    sumSrcSrcVol_Quarter
+
+// Calculate VWAP for each range
+compositeVWAP_Day = sumSrcVol_Day / sumVol_Day
+compositeVWAP_Week = sumSrcVol_Week / sumVol_Week
+compositeVWAP_Month = sumSrcVol_Month / sumVol_Month
+compositeVWAP_Quarter = sumSrcVol_Quarter / sumVol_Quarter
+
+// Calculate variance and standard deviation for each VWAP
+variance_Day = sumSrcSrcVol_Day / sumVol_Day - math.pow(compositeVWAP_Day, 2)
+variance_Week = sumSrcSrcVol_Week / sumVol_Week - math.pow(compositeVWAP_Week, 2)
+variance_Month = sumSrcSrcVol_Month / sumVol_Month - math.pow(compositeVWAP_Month, 2)
+variance_Quarter = sumSrcSrcVol_Quarter / sumVol_Quarter - math.pow(compositeVWAP_Quarter, 2)
+
+variance_Day := math.max(0, variance_Day)
+variance_Week := math.max(0, variance_Week)
+variance_Month := math.max(0, variance_Month)
+variance_Quarter := math.max(0, variance_Quarter)
+
+stDev_Day = math.sqrt(variance_Day)
+stDev_Week = math.sqrt(variance_Week)
+stDev_Month = math.sqrt(variance_Month)
+stDev_Quarter = math.sqrt(variance_Quarter)
+
+// Bollinger Bands based on VWAP and Std Dev
+upperBand_Day = compositeVWAP_Day + stDev_Day * 1
+lowerBand_Day = compositeVWAP_Day - stDev_Day * 1
+
+upperBand_Week = compositeVWAP_Week + stDev_Week * 1
+lowerBand_Week = compositeVWAP_Week - stDev_Week * 1
+
+upperBand_Month = compositeVWAP_Month + stDev_Month * 1
+lowerBand_Month = compositeVWAP_Month - stDev_Month * 1
+
+upperBand_Quarter = compositeVWAP_Quarter + stDev_Quarter * 1
+lowerBand_Quarter = compositeVWAP_Quarter - stDev_Quarter * 1
+
+// Plot VWAP and Bollinger Bands
+plot(Plot_Ctl and Composite_Ctl_Day and time < endCalculationDate_Day ? compositeVWAP_Day : na, color = color.new(Composite_Day_Col, 60))
+composite_Day_upper = plot(Plot_Ctl and Composite_Ctl_Day and time < endCalculationDate_Day ? upperBand_Day : na, color = color.new(Composite_Day_Col, 80))
+composite_Day_lower = plot(Plot_Ctl and Composite_Ctl_Day and time < endCalculationDate_Day ? lowerBand_Day : na, color = color.new(Composite_Day_Col, 80))
+fill(composite_Day_upper, composite_Day_lower, color.new(Composite_Day_Col, 95))
+
+plot(Plot_Ctl and Composite_Ctl_Week and time < endCalculationDate_Week ? compositeVWAP_Week : na, color = color.new(Composite_Week_Col, 60))
+composite_Week_upper = plot(Plot_Ctl and Composite_Ctl_Week and time < endCalculationDate_Week ? upperBand_Week : na, color = color.new(Composite_Week_Col, 80))
+composite_Week_lower = plot(Plot_Ctl and Composite_Ctl_Week and time < endCalculationDate_Week ? lowerBand_Week : na, color = color.new(Composite_Week_Col, 80))
+fill(composite_Week_upper, composite_Week_lower, color.new(Composite_Week_Col, 95))
+
+plot(Plot_Ctl and Composite_Ctl_Month and time < endCalculationDate_Month ? compositeVWAP_Month : na, color = color.new(Composite_Month_Col, 60))
+composite_Month_upper = plot(Plot_Ctl and Composite_Ctl_Month and time < endCalculationDate_Month ? upperBand_Month : na, color = color.new(Composite_Month_Col, 80))
+composite_Month_lower = plot(Plot_Ctl and Composite_Ctl_Month and time < endCalculationDate_Month ? lowerBand_Month : na, color = color.new(Composite_Month_Col, 80))
+fill(composite_Month_upper, composite_Month_lower, color.new(Composite_Month_Col, 95))
+
+plot(Plot_Ctl and Composite_Ctl_Quarter and time < endCalculationDate_Quarter ? compositeVWAP_Quarter : na, color = color.new(Composite_Quarter_Col, 60))
+composite_Quarter_upper = plot(Plot_Ctl and Composite_Ctl_Quarter and time < endCalculationDate_Quarter ? upperBand_Quarter : na, color = color.new(Composite_Quarter_Col, 80))
+composite_Quarter_lower = plot(Plot_Ctl and Composite_Ctl_Quarter and time < endCalculationDate_Quarter ? lowerBand_Quarter : na, color = color.new(Composite_Quarter_Col, 80))
+fill(composite_Quarter_upper, composite_Quarter_lower, color.new(Composite_Quarter_Col, 95))
+
+if barstate.islast
+    if Box_Ctl
+        // Composite Control for Day
+        if Composite_Ctl_Day
+            labelTextUpper_Day = 'C' + str.tostring(Composite_range_1_Day - Composite_range_2_Day) + 'D VWAP +1'
+            labelTextLower_Day = 'C' + str.tostring(Composite_range_1_Day - Composite_range_2_Day) + 'D VWAP -1'
+            labelTextPOC_Day = 'C' + str.tostring(Composite_range_1_Day - Composite_range_2_Day) + 'D VWAP'
+
+            var lastPeriodBox_Day = box.new(left = endCalculationDate_Day, right = right_bar, top = upperBand_Day, bottom = lowerBand_Day, border_color = color.rgb(255, 255, 255, 100), bgcolor = color.new(Composite_Day_Col, 95), xloc = xloc.bar_time)
+            var lastPeriodMidLine_Day = line.new(x1 = endCalculationDate_Day, y1 = compositeVWAP_Day, x2 = right_bar, y2 = compositeVWAP_Day, color = color.new(Composite_Day_Col, 60), width = 1, style = DEFAULT_LINE_STYLE, xloc = xloc.bar_time)
+            var lastPeriodUpperlabel_Day = label.new(right_bar, y = upperBand_Day, text = labelTextUpper_Day, tooltip = str.tostring(upperBand_Day, format_level), color = label_color_setting, textcolor = color.new(Composite_Day_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+            var lastPeriodLowerlabel_Day = label.new(right_bar, y = lowerBand_Day, text = labelTextLower_Day, tooltip = str.tostring(lowerBand_Day, format_level), color = label_color_setting, textcolor = color.new(Composite_Day_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+            var lastPeriodPOClabel_Day = label.new(right_bar, y = compositeVWAP_Day, text = labelTextPOC_Day, tooltip = str.tostring(compositeVWAP_Day, format_level), color = label_color_setting, textcolor = color.new(Composite_Day_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+
+        // Composite Control for Week
+        if Composite_Ctl_Week
+            labelTextUpper_Week = 'C' + str.tostring(Composite_range_1_Week - Composite_range_2_Week) + 'W VWAP +1'
+            labelTextLower_Week = 'C' + str.tostring(Composite_range_1_Week - Composite_range_2_Week) + 'W VWAP -1'
+            labelTextPOC_Week = 'C' + str.tostring(Composite_range_1_Week - Composite_range_2_Week) + 'W VWAP'
+
+            var lastPeriodBox_Week = box.new(left = endCalculationDate_Week, right = right_bar, top = upperBand_Week, bottom = lowerBand_Week, border_color = color.rgb(255, 255, 255, 100), bgcolor = color.new(Composite_Week_Col, 95), xloc = xloc.bar_time)
+            var lastPeriodMidLine_Week = line.new(x1 = endCalculationDate_Week, y1 = compositeVWAP_Week, x2 = right_bar, y2 = compositeVWAP_Week, color = color.new(Composite_Week_Col, 60), width = 1, style = DEFAULT_LINE_STYLE, xloc = xloc.bar_time)
+            var lastPeriodUpperlabel_Week = label.new(right_bar, y = upperBand_Week, text = labelTextUpper_Week, tooltip = str.tostring(upperBand_Week, format_level), color = label_color_setting, textcolor = color.new(Composite_Week_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+            var lastPeriodLowerlabel_Week = label.new(right_bar, y = lowerBand_Week, text = labelTextLower_Week, tooltip = str.tostring(lowerBand_Week, format_level), color = label_color_setting, textcolor = color.new(Composite_Week_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+            var lastPeriodPOClabel_Week = label.new(right_bar, y = compositeVWAP_Week, text = labelTextPOC_Week, tooltip = str.tostring(compositeVWAP_Week, format_level), color = label_color_setting, textcolor = color.new(Composite_Week_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+
+        // Composite Control for Month
+        if Composite_Ctl_Month
+            labelTextUpper_Month = 'C' + str.tostring(Composite_range_1_Month - Composite_range_2_Month) + 'M VWAP +1'
+            labelTextLower_Month = 'C' + str.tostring(Composite_range_1_Month - Composite_range_2_Month) + 'M VWAP -1'
+            labelTextPOC_Month = 'C' + str.tostring(Composite_range_1_Month - Composite_range_2_Month) + 'M VWAP'
+
+            var lastPeriodBox_Month = box.new(left = endCalculationDate_Month, right = right_bar, top = upperBand_Month, bottom = lowerBand_Month, border_color = color.rgb(255, 255, 255, 100), bgcolor = color.new(Composite_Month_Col, 95), xloc = xloc.bar_time)
+            var lastPeriodMidLine_Month = line.new(x1 = endCalculationDate_Month, y1 = compositeVWAP_Month, x2 = right_bar, y2 = compositeVWAP_Month, color = color.new(Composite_Month_Col, 60), width = 1, style = DEFAULT_LINE_STYLE, xloc = xloc.bar_time)
+            var lastPeriodUpperlabel_Month = label.new(right_bar, y = upperBand_Month, text = labelTextUpper_Month, tooltip = str.tostring(upperBand_Month, format_level), color = label_color_setting, textcolor = color.new(Composite_Month_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+            var lastPeriodLowerlabel_Month = label.new(right_bar, y = lowerBand_Month, text = labelTextLower_Month, tooltip = str.tostring(lowerBand_Month, format_level), color = label_color_setting, textcolor = color.new(Composite_Month_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+            var lastPeriodPOClabel_Month = label.new(right_bar, y = compositeVWAP_Month, text = labelTextPOC_Month, tooltip = str.tostring(compositeVWAP_Month, format_level), color = label_color_setting, textcolor = color.new(Composite_Month_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+        
+         // Composite Control for Quarter
+        if Composite_Ctl_Quarter
+            labelTextUpper_Quarter = 'C' + str.tostring(Composite_range_1_Quarter - Composite_range_2_Quarter) + 'Q VWAP +1'
+            labelTextLower_Quarter = 'C' + str.tostring(Composite_range_1_Quarter - Composite_range_2_Quarter) + 'Q VWAP -1'
+            labelTextPOC_Quarter = 'C' + str.tostring(Composite_range_1_Quarter - Composite_range_2_Quarter) + 'Q VWAP'
+
+            var lastPeriodBox_Quarter = box.new(left = endCalculationDate_Quarter, right = right_bar, top = upperBand_Quarter, bottom = lowerBand_Quarter, border_color = color.rgb(255, 255, 255, 100), bgcolor = color.new(Composite_Quarter_Col, 95), xloc = xloc.bar_time)
+            var lastPeriodMidLine_Quarter = line.new(x1 = endCalculationDate_Quarter, y1 = compositeVWAP_Quarter, x2 = right_bar, y2 = compositeVWAP_Quarter, color = color.new(Composite_Quarter_Col, 60), width = 1, style = DEFAULT_LINE_STYLE, xloc = xloc.bar_time)
+            var lastPeriodUpperlabel_Quarter = label.new(right_bar, y = upperBand_Quarter, text = labelTextUpper_Quarter, tooltip = str.tostring(upperBand_Quarter, format_level), color = label_color_setting, textcolor = color.new(Composite_Quarter_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+            var lastPeriodLowerlabel_Quarter = label.new(right_bar, y = lowerBand_Quarter, text = labelTextLower_Quarter, tooltip = str.tostring(lowerBand_Quarter, format_level), color = label_color_setting, textcolor = color.new(Composite_Quarter_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+            var lastPeriodPOClabel_Quarter = label.new(right_bar, y = compositeVWAP_Quarter, text = labelTextPOC_Quarter, tooltip = str.tostring(compositeVWAP_Quarter, format_level), color = label_color_setting, textcolor = color.new(Composite_Quarter_Col, 40), style = DEFAULT_LABEL_STYLE, xloc = xloc.bar_time, text_font_family = font.family_monospace)
+
