@@ -14,6 +14,10 @@ len = input.int(20, 'Z-Score MA Length')
 z1 = input.float(1.5, 'Threshold z1', step = 0.1)
 z2 = input.float(2.5, 'Threshold z2', step = 0.1)
 
+// --- Symbol ---
+symbol1 = input.symbol('BINANCE:BTCUSDT')
+symbol2 = input.symbol('COINBASE:BTCUSD')
+
 // --- Up colors ---
 color_up_normal = input.color(color.rgb(255, 255, 255, 40), 'normal', inline = 'l2', group = 'Up color')
 color_up_large = input.color(color.rgb(91, 156, 246), 'large', inline = 'l2', group = 'Up color')
@@ -32,8 +36,8 @@ f_zscore(src, len) =>
     (src - mean) / std
 
 // === Volume from Other Exchanges ===
-vol_binance = request.security("BINANCE:BTCUSDT", timeframe.period, volume)
-vol_coinbase = request.security("COINBASE:BTCUSD", timeframe.period, volume)
+vol_binance = request.security(symbol1, timeframe.period, volume)
+vol_coinbase = request.security(symbol2, timeframe.period, volume)
 
 // === Z-scores ===
 z_binance = f_zscore(vol_binance, len)
