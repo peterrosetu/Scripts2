@@ -1,16 +1,16 @@
 // This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
 // © Edward
 
-// ref https://www.tradingview.com/script/0KInGMjR-Candle-Colored-by-Volume-Z-score-Morty/ by M0rty 2022.04.25
-// Modified & Added Code by Edward 2025.05.20
-// - Calc with BINANCE + COINBASE Vol
-// - Show the POC (current chart vol)
+// - https://www.tradingview.com/script/0KInGMjR-Candle-Colored-by-Volume-Z-score-Morty/ by M0rty
+// - https://www.tradingview.com/script/cgHGBnH9-Naked-Intrabar-POC/ by rumpypumpydumpy 
+// - Modified & Added Code by Edward
 
 //@version=6
 indicator('High Volume Bar Z-score', overlay = true, max_bars_back = 4999, max_polylines_count = 100, max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500)
 
 // === Inputs ===
-len = input.int(20, 'Z-Score MA Length')
+mode = input.string('SMA', 'MA Type',['SMA', 'EMA'])
+len = input.int(24, 'Z-Score MA Length')
 z1 = input.float(1.5, 'Threshold z1', step = 0.1)
 z2 = input.float(2.5, 'Threshold z2', step = 0.1)
 
@@ -27,11 +27,11 @@ color_up_extreme = input.color(color.rgb(6, 156, 118), 'extreme', inline = 'l2',
 color_down_normal = input.color(color.rgb(255, 255, 255, 100), 'normal', inline = 'l3', group = 'Down color')
 color_down_large = input.color(color.rgb(247, 124, 128), 'large', inline = 'l3', group = 'Down color')
 color_down_extreme = input.color(color.rgb(236, 64, 122), 'extreme', inline = 'l3', group = 'Down color')
-show_poc = input.bool(true, 'Show POC', group = 'Point of Control')
+show_poc_as = input.string('High Vol', 'Show POC', ['None', 'High Vol', 'All'], group = 'Point of Control')
 
 // === Z-score Function ===
 f_zscore(src, len) =>
-    mean = ta.sma(src, len)
+    mean = mode == 'SMA' ? ta.sma(src, len) : ta.ema(src, len)
     std = ta.stdev(src, len)
     (src - mean) / std
 
@@ -79,7 +79,9 @@ float intrabar_poc = na
 
 size = array.size(intrabar_highs)
 
-if size > 0 and is_highlight and show_poc
+show_poc = (show_poc_as == 'All' and size > 0) or (show_poc_as == 'High Vol' and is_highlight and size > 0)
+
+if show_poc
 
     array<float> tpo_bins = array.new_float()
 
@@ -160,3 +162,6 @@ if array.size(poc_lines) > 0
         temp_line = array.get(poc_lines, i)
         if array.get(poc_hit, i) == false
             line.set_x2(temp_line, x = bar_index + 1)
+
+
+// -----------------------------------------------------------------------------
