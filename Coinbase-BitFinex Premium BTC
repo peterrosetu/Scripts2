@@ -1,0 +1,22 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Edward
+
+//@version=6
+indicator('Coinbase / BitFinex Premium BTC')
+
+Exchange = input.string('Coinbase', 'Exchange',['Coinbase', 'BitFinex'])
+
+// Get Coinbase Prices
+cbSpot = request.security('COINBASE:BTCUSD', timeframe.period, close)
+
+// Get BitFinex Prices
+bfSpot = request.security('BitFinex:BTCUSD', timeframe.period, close)
+
+// Get Binance Prices
+bnSpot = request.security('BINANCE:BTCUSDT', timeframe.period, close)
+
+// Calculate Premium
+prem = Exchange == 'Coinbase' ? cbSpot - bnSpot : bfSpot - bnSpot
+
+// Plot Visual Premium
+plot(prem, histbase = 0, color = prem < 0 ? color.red : color.green, style = plot.style_columns)
