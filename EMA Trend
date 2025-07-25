@@ -1,16 +1,18 @@
 //@version=6
 indicator(title = 'EMA Trend', overlay = true)
 
-enableA = input.bool(true, title = "Enable Group A")
+src = input.source(close, 'Source', group = 'Source')
 
-len4 = input.int(13, minval = 1, inline = 'A', title = 'A1')
-out4 = ta.ema(close, len4)
+enableA = input.bool(true, title = "Enable",  group = 'Group A')
 
-len5 = input.int(21, minval = 1, inline = 'A', title = 'A2')
-out5 = ta.ema(close, len5)
+len4 = input.int(13, minval = 1, group = 'Group A', title = 'A1')
+out4 = ta.ema(src, len4)
 
-len6 = input.int(34, minval = 1, inline = 'A', title = 'A3')
-out6 = ta.ema(close, len6)
+len5 = input.int(21, minval = 1, group = 'Group A', title = 'A2')
+out5 = ta.ema(src, len5)
+
+len6 = input.int(34, minval = 1, group = 'Group A', title = 'A3')
+out6 = ta.ema(src, len6)
 
 midA = 
   (out4 >= out5 and out5 >= out6) or (out6 >= out5 and out5 >= out4) ? out5 : 
@@ -26,14 +28,15 @@ a3 = plot(enableA ? midA : na, color = color.rgb(255, 255, 255, 69))
 
 fill(a1, a2, color = color.rgb(255, 255, 255, 98))
 
-enableB = input.bool(true, title = "Enable Group B")
+enableB = input.bool(true, title = "Enable",  group = 'Group B')
 
-len7 = input.int(100, minval = 1, inline = 'B', title = 'B1')
-out7 = ta.ema(close, len7)
+len7 = input.int(100, minval = 1, group = 'Group B', title = 'B1')
+out7 = ta.ema(src, len7)
+
+len8 = input.int(200, minval = 1, group = 'Group B', title = 'B2')
+out8 = ta.ema(src, len8)
+
 b1 = plot(enableB ? out7 : na, color = color.rgb(91, 156, 246, 85))
-
-len8 = input.int(200, minval = 1, inline = 'B', title = 'B2')
-out8 = ta.ema(close, len8)
 b2 = plot(enableB ? out8 : na, color = color.rgb(91, 156, 246, 85))
 
 fill(b1, b2, color = color.rgb(91, 156, 246, 98))
