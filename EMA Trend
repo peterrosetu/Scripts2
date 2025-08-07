@@ -1,7 +1,7 @@
 //@version=6
 indicator(title = 'EMA Trend', overlay = true)
 
-src = input.source(close, 'Source', group = 'Source')
+src = input.source(close, 'Src', group = 'Source')
 
 enableA = input.bool(true, title = "Enable",  group = 'Group A')
 
@@ -31,12 +31,19 @@ fill(a1, a2, color = color.rgb(255, 255, 255, 98))
 enableB = input.bool(true, title = "Enable",  group = 'Group B')
 
 len7 = input.int(100, minval = 1, group = 'Group B', title = 'B1')
-out7 = ta.ema(src, len7)
-
 len8 = input.int(200, minval = 1, group = 'Group B', title = 'B2')
-out8 = ta.ema(src, len8)
 
-b1 = plot(enableB ? out7 : na, color = color.rgb(91, 156, 246, 85))
-b2 = plot(enableB ? out8 : na, color = color.rgb(91, 156, 246, 85))
+h100 = request.security(syminfo.tickerid, "240", ta.ema(src, len7), gaps=barmerge.gaps_on, lookahead=barmerge.lookahead_off)
+h200 = request.security(syminfo.tickerid, "240", ta.ema(src, len8), gaps=barmerge.gaps_on, lookahead=barmerge.lookahead_off)
 
-fill(b1, b2, color = color.rgb(91, 156, 246, 98))
+d100 = request.security(syminfo.tickerid, "D", ta.ema(src, len7), gaps=barmerge.gaps_on, lookahead=barmerge.lookahead_off)
+d200 = request.security(syminfo.tickerid, "D", ta.ema(src, len8), gaps=barmerge.gaps_on, lookahead=barmerge.lookahead_off)
+
+b1 = plot(enableB ? h100 : na, color = color.rgb(91, 156, 246, 85))
+b2 = plot(enableB ? h200 : na, color = color.rgb(91, 156, 246, 85))
+
+b3 = plot(enableB ? d100 : na, color = color.rgb(240, 98, 146, 85))
+b4 = plot(enableB ? d200 : na, color = color.rgb(240, 98, 146, 85))
+
+fill(b1, b2, color = color.rgb(91, 156, 246, 98), fillgaps = true)
+fill(b3, b4, color = color.rgb(240, 98, 146, 98), fillgaps = true)
