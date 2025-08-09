@@ -1,0 +1,82 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © Edward
+
+//@version=6
+indicator('Heikin Ashi Momentum', overlay = true)
+
+// User inputs
+float precision = input.float(0.25, title = 'Doji\'s Max Body Size', step = 0.01, minval = 0.01, maxval = 0.5)
+
+// Settings for base candles
+useBaseLevels = input.bool(false, 'Identify the base levels as High and Low.')
+showBaseBoundaries = input.bool(true, 'Visualize the upper and lower boundaries for the main candle.')
+colorInsideBars = input.bool(false, 'Apply color to inside bars.')
+
+// Fetch Heikin Ashi data
+haTicker = ticker.heikinashi(syminfo.tickerid)
+[haOpen, haHigh, haLow, haClose] = request.security(haTicker, timeframe.period, [open, high, low, close])
+
+// Calculate body size, range, and ATR for long-body threshold
+bodySize = math.abs(haClose - haOpen)
+candleRange = haHigh - haLow
+
+// Doji/indecision check (your method)
+bool isDoji = bodySize <= candleRange * precision
+
+// Define bar types
+bool barType = false
+int position = na
+color barColor = na
+
+bool isBullish = haClose > haOpen
+bool isBearish = haClose < haOpen
+
+if isDoji
+    barType := true
+    position := haClose[1] > haOpen[1] ? 1 : 2
+    barColor := #ff9800
+    barColor
+else if isBullish
+    if haLow == haOpen // Strong Uptrend: No lower shadow, long body
+        barColor := #53b987
+        barColor
+    else if haClose[1] > haOpen[1] and bodySize < math.abs(haClose[1] - haOpen[1]) // Week Uptrend
+        barType := true
+        position := 1
+        barColor := #5b9cf6
+        barColor
+else if isBearish
+    if haHigh == haOpen // Strong Downtrend: No upper shadow, long body
+        barColor := #ec407a
+        barColor
+    else if haClose[1] < haOpen[1] and bodySize < math.abs(haClose[1] - haOpen[1]) // Week Downtrend
+        barType := true
+        position := 2
+        barColor := #ec407a
+        barColor
+
+// Plot HA candles
+// plotcandle(haOpen, haHigh, haLow, haClose, title = 'HA Candle', color = barColor, wickcolor = barColor, bordercolor = barColor)
+
+plotchar(position == 1 and barType, char = '•', color = barColor, location = location.abovebar, size = size.tiny)
+plotchar(position == 2 and barType, char = '•', color = barColor, location = location.belowbar, size = size.tiny)
+
+// Determine high and low values for base and inside bars
+baseHigh = useBaseLevels ? haHigh : haOpen > haClose ? haOpen : haClose
+baseLow = useBaseLevels ? haLow : haOpen > haClose ? haClose : haOpen
+
+insideHigh = haOpen > haClose ? haOpen : haClose
+insideLow = haOpen > haClose ? haClose : haOpen
+
+// Initialize variable for the main candle index
+var int mainCandleIndex = 0
+
+// Logic for determining the main candle and updating mainCandleIndex
+mainCandleIndex := insideLow <= baseHigh[bar_index - mainCandleIndex] and insideLow >= baseLow[bar_index - mainCandleIndex] and insideHigh <= baseHigh[bar_index - mainCandleIndex] and insideHigh >= baseLow[bar_index - mainCandleIndex] and bar_index > 1 ? mainCandleIndex[1] : bar_index
+
+// Visualize the upper and lower boundaries for the main candle if enabled
+plot(showBaseBoundaries and mainCandleIndex == mainCandleIndex[1] ? baseHigh[bar_index - mainCandleIndex] : na, color = color.silver, style = plot.style_linebr, linewidth = 1)
+plot(showBaseBoundaries and mainCandleIndex == mainCandleIndex[1] ? baseLow[bar_index - mainCandleIndex] : na, color = color.silver, style = plot.style_linebr, linewidth = 1)
+
+// Change color of bars for inside bars
+barcolor(colorInsideBars and bar_index - mainCandleIndex > 0 ? color.aqua : na)
