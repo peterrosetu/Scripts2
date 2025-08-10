@@ -2,7 +2,7 @@
 // © Edward
 
 //@version=6
-indicator('Heikin Ashi Momentum', overlay = true)
+indicator('Heikin Ashi Momentum', overlay = false)
 
 // User inputs
 float precision = input.float(0.25, title = 'Doji\'s Max Body Size', step = 0.01, minval = 0.01, maxval = 0.5)
@@ -56,7 +56,7 @@ else if isBearish
         barColor
 
 // Plot HA candles
-// plotcandle(haOpen, haHigh, haLow, haClose, title = 'HA Candle', color = barColor, wickcolor = barColor, bordercolor = barColor)
+plotcandle(haOpen, haHigh, haLow, haClose, title = 'HA Candle', color = isBullish ? color.rgb(255, 255, 255, 50) : color.rgb(255, 255, 255, 100), wickcolor = color.rgb(255, 255, 255, 50), bordercolor = color.rgb(255, 255, 255, 50))
 
 plotchar(position == 1 and barType, char = '•', color = barColor, location = location.abovebar, size = size.tiny)
 plotchar(position == 2 and barType, char = '•', color = barColor, location = location.belowbar, size = size.tiny)
