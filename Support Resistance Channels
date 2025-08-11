@@ -1,11 +1,11 @@
 //@version=6
 indicator('Support Resistance Channels', 'SRchannel', overlay = true, max_bars_back = 501)
-prd = input.int(defval = 10, title = 'Pivot Period', minval = 4, maxval = 30, group = 'Settings', tooltip = 'Used while calculating Pivot Points, checks left&right bars')
+prd = input.int(defval = 10, title = 'Pivot Period', minval = 4, maxval = 50, group = 'Settings', tooltip = 'Used while calculating Pivot Points, checks left&right bars')
 ppsrc = input.string(defval = 'High/Low', title = 'Source', options = ['High/Low', 'Close/Open'], group = 'Settings', tooltip = 'Source for Pivot Points')
 ChannelW = input.int(defval = 5, title = 'Maximum Channel Width %', minval = 1, maxval = 8, group = 'Settings', tooltip = 'Calculated using Highest/Lowest levels in 300 bars')
 minstrength = input.int(defval = 1, title = 'Minimum Strength', minval = 1, group = 'Settings', tooltip = 'Channel must contain at least 2 Pivot Points')
 maxnumsr = input.int(defval = 10, title = 'Maximum Number of S/R', minval = 1, maxval = 10, group = 'Settings', tooltip = 'Maximum number of Support/Resistance Channels to Show') - 1
-loopback = input.int(defval = 400, title = 'Loopback Period', minval = 100, maxval = 400, group = 'Settings', tooltip = 'While calculating S/R levels it checks Pivots in Loopback Period')
+loopback = input.int(defval = 500, title = 'Loopback Period', minval = 100, maxval = 500, group = 'Settings', tooltip = 'While calculating S/R levels it checks Pivots in Loopback Period')
 res_col = input.color(defval = color.new(#ce93d8, 80), title = 'Resistance Color', group = 'Colors')
 sup_col = input.color(defval = color.new(#4dd0e1, 80), title = 'Support Color', group = 'Colors')
 inch_col = input.color(defval = color.new(color.gray, 80), title = 'Color When Price in Channel', group = 'Colors')
