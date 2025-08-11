@@ -25,9 +25,9 @@ midA =
 minA = math.min(out4, out5, out6)
 maxA = math.max(out4, out5, out6)
 
-a1 = plot(enableA ? minA : na, color = color.rgb(255, 255, 255, 85))
-a2 = plot(enableA ? maxA : na, color = color.rgb(255, 255, 255, 85))
-a3 = plot(enableA ? midA : na, color = color.rgb(255, 255, 255, 69))
+a1 = plot(enableA ? minA : na, color = color.rgb(255, 255, 255, 69))
+a2 = plot(enableA ? maxA : na, color = color.rgb(255, 255, 255, 69))
+a3 = plot(enableA ? midA : na, color = color.rgb(255, 255, 255, 49))
 
 fill(a1, a2, color = color.rgb(255, 255, 255, 98))
 
@@ -43,11 +43,11 @@ h200 = request.security(syminfo.tickerid, "240", ta.ema(src, len8), gaps=barmerg
 d100 = request.security(syminfo.tickerid, "D", ta.ema(src, len7), gaps=barmerge.gaps_on, lookahead=barmerge.lookahead_off)
 d200 = request.security(syminfo.tickerid, "D", ta.ema(src, len8), gaps=barmerge.gaps_on, lookahead=barmerge.lookahead_off)
 
-b1 = plot(enableB1 ? h100 : na, color = color.rgb(91, 156, 246, 85))
-b2 = plot(enableB1 ? h200 : na, color = color.rgb(91, 156, 246, 85))
+b1 = plot(enableB1 ? h100 : na, color = color.rgb(91, 156, 246, 60))
+b2 = plot(enableB1 ? h200 : na, color = color.rgb(91, 156, 246, 60))
 
-b3 = plot(enableB2 ? d100 : na, color = color.rgb(240, 98, 146, 85))
-b4 = plot(enableB2 ? d200 : na, color = color.rgb(240, 98, 146, 85))
+b3 = plot(enableB2 ? d100 : na, color = color.rgb(240, 98, 146, 60))
+b4 = plot(enableB2 ? d200 : na, color = color.rgb(240, 98, 146, 60))
 
-fill(b1, b2, color = color.rgb(91, 156, 246, 98), fillgaps = true)
-fill(b3, b4, color = color.rgb(240, 98, 146, 98), fillgaps = true)
+fill(b1, b2, color = color.rgb(91, 156, 246, 95), fillgaps = true)
+fill(b3, b4, color = color.rgb(240, 98, 146, 95), fillgaps = true)
